@@ -7,16 +7,19 @@ Official-Debian base images with the `ca-certificates` package already installed
 - **Maintained by:** [jmhodges](https://github.com/jmhodges) — see [jmhodges/ca-certs-images](https://github.com/jmhodges/ca-certs-images)
 - **Where to file issues:** https://github.com/jmhodges/ca-certs-images/issues
 - **Supported architectures:** `amd64`, `arm64`
-- **Source Dockerfiles:** [`debian-12`](https://github.com/jmhodges/ca-certs-images/blob/main/debian-12/Dockerfile), [`debian-13`](https://github.com/jmhodges/ca-certs-images/blob/main/debian-13/Dockerfile), [`debian-forky`](https://github.com/jmhodges/ca-certs-images/blob/main/debian-forky/Dockerfile)
+- **Source Dockerfiles:** [`debian-12`](https://github.com/jmhodges/ca-certs-images/blob/main/debian-12/Dockerfile), [`debian-12-slim`](https://github.com/jmhodges/ca-certs-images/blob/main/debian-12-slim/Dockerfile), [`debian-13`](https://github.com/jmhodges/ca-certs-images/blob/main/debian-13/Dockerfile), [`debian-13-slim`](https://github.com/jmhodges/ca-certs-images/blob/main/debian-13-slim/Dockerfile), [`debian-forky`](https://github.com/jmhodges/ca-certs-images/blob/main/debian-forky/Dockerfile), [`debian-forky-slim`](https://github.com/jmhodges/ca-certs-images/blob/main/debian-forky-slim/Dockerfile)
 - **Signing & provenance:** keyless [cosign](https://github.com/sigstore/cosign) signatures, plus SLSA provenance and SBOM attestations
 
 ## Supported tags
 
-| Tag            | Aliases            | Debian version | Codename | Status          |
-|----------------|--------------------|----------------|----------|-----------------|
-| `debian-12`    | `bookworm`         | 12             | bookworm | oldstable / LTS |
-| `debian-13`    | `trixie`           | 13             | trixie   | stable          |
-| `debian-forky` | `forky`, `testing` | testing        | forky    | testing         |
+| Tag                 | Aliases                      | Debian version | Codename | Status          |
+|---------------------|------------------------------|----------------|----------|-----------------|
+| `debian-12`         | `bookworm`                   | 12             | bookworm | oldstable / LTS |
+| `debian-12-slim`    | `bookworm-slim`              | 12 (slim)      | bookworm | oldstable / LTS |
+| `debian-13`         | `trixie`                     | 13             | trixie   | stable          |
+| `debian-13-slim`    | `trixie-slim`                | 13 (slim)      | trixie   | stable          |
+| `debian-forky`      | `forky`, `testing`           | testing        | forky    | testing         |
+| `debian-forky-slim` | `forky-slim`, `testing-slim` | testing (slim) | forky    | testing         |
 
 End-of-life Debian releases (10 "buster" and earlier) are not built.
 
@@ -78,6 +81,14 @@ Each variant tracks one currently-supported Debian release and is built for
 - **`debian-13` (`trixie`)** — Debian 13, the current stable release.
 - **`debian-forky` (`forky`, `testing`)** — Debian testing. Moves often; pin to a
   digest if you need it to hold still.
+
+Each release also ships a `-slim` variant built on the official
+`debian:<tag>-slim` base, which drops files (man pages, locales, etc.) most
+container workloads don't need:
+
+- **`debian-12-slim` (`bookworm-slim`)** — Debian 12 slim, oldstable / LTS.
+- **`debian-13-slim` (`trixie-slim`)** — Debian 13 slim, the current stable release.
+- **`debian-forky-slim` (`forky-slim`, `testing-slim`)** — Debian testing slim.
 
 Tags are mutable: each push to `main` rebuilds them against the latest Debian
 base, so `:debian-13` follows Debian 13's security updates over time. Pin to a

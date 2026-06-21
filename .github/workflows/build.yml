@@ -43,15 +43,28 @@ jobs:
             tags: |
               cacertsfriend/ca-certs-images:debian-12
               cacertsfriend/ca-certs-images:bookworm
+          - dir: debian-12-slim
+            tags: |
+              cacertsfriend/ca-certs-images:debian-12-slim
+              cacertsfriend/ca-certs-images:bookworm-slim
           - dir: debian-13
             tags: |
               cacertsfriend/ca-certs-images:debian-13
               cacertsfriend/ca-certs-images:trixie
+          - dir: debian-13-slim
+            tags: |
+              cacertsfriend/ca-certs-images:debian-13-slim
+              cacertsfriend/ca-certs-images:trixie-slim
           - dir: debian-forky
             tags: |
               cacertsfriend/ca-certs-images:debian-forky
               cacertsfriend/ca-certs-images:forky
               cacertsfriend/ca-certs-images:testing
+          - dir: debian-forky-slim
+            tags: |
+              cacertsfriend/ca-certs-images:debian-forky-slim
+              cacertsfriend/ca-certs-images:forky-slim
+              cacertsfriend/ca-certs-images:testing-slim
     steps:
       - name: Checkout
         # fetch-depth: 0 so the push-decision step below can diff the full
