@@ -1,10 +1,21 @@
 version: 2
 updates:
+  # Debian 12 (bookworm): allow minor/point-release and digest (sha) bumps,
+  # but never jump the major version (e.g. debian:12 -> debian:13).
   - package-ecosystem: "docker"
     directory: "/debian-12"
     schedule:
       interval: "daily"
+    ignore:
+      - dependency-name: "debian"
+        update-types:
+          - "version-update:semver-major"
+  # Debian 13 (trixie): same policy, pinned to the 13 major version.
   - package-ecosystem: "docker"
     directory: "/debian-13"
     schedule:
       interval: "daily"
+    ignore:
+      - dependency-name: "debian"
+        update-types:
+          - "version-update:semver-major"
