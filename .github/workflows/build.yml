@@ -139,9 +139,37 @@ jobs:
       contents: read
     steps:
       - name: Checkout
+        # fetch-depth: 0 so the decide step below can diff the full push
+        # range (github.event.before..github.sha).
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+
+      # Only re-sync the Docker Hub overview when the docs that feed it -- or
+      # this workflow itself -- changed in the pushed range. A commit that only
+      # touches a Dockerfile leaves the overview untouched, so there is nothing
+      # to push.
+      - name: Decide whether to sync docs
+        id: decide
+        env:
+          BEFORE: ${{ github.event.before }}
+          SHA: ${{ github.sha }}
+        run: |
+          base="$BEFORE"
+          if [ -z "$base" ] || [ "$base" = "0000000000000000000000000000000000000000" ]; then
+            base="${SHA}^"
+          fi
+          pattern="^(docs/dockerhub/|\.github/workflows/build\.yml$)"
+          if git diff --name-only "$base" "$SHA" | grep -Eq "$pattern"; then
+            echo "docs/dockerhub (or the build workflow) changed since $base: will sync."
+            echo "sync=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "docs/dockerhub unchanged since $base: skipping sync."
+            echo "sync=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Sync Docker Hub description
+        if: steps.decide.outputs.sync == 'true'
         uses: peter-evans/dockerhub-description@1b9a80c056b620d92cedb9d9b5a223409c68ddfa # v5.0.0
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
