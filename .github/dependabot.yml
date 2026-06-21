@@ -19,3 +19,10 @@ updates:
       - dependency-name: "debian"
         update-types:
           - "version-update:semver-major"
+  # Keep the SHA-pinned GitHub Actions in the build workflow up to date; the
+  # pins would otherwise silently rot. Dependabot bumps both the digest and
+  # the trailing version comment.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "daily"
