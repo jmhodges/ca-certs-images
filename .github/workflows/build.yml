@@ -17,6 +17,11 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    # contents: read to checkout; id-token: write so cosign can mint a
+    # short-lived OIDC token for keyless signing (only used on push to main).
+    permissions:
+      contents: read
+      id-token: write
     # Use the docker-pusher environment (which holds DOCKERHUB_USERNAME and
     # DOCKERHUB_TOKEN) only when we actually push, i.e. on pushes to main.
     # Pull request runs build-only and get no environment / secrets.
@@ -53,6 +58,7 @@ jobs:
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Build and push
+        id: build
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
         with:
           context: ./${{ matrix.dir }}
@@ -61,10 +67,27 @@ jobs:
           tags: ${{ matrix.tags }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          # SLSA provenance + SBOM attestations, attached to the image we push.
+          provenance: ${{ github.event_name != 'pull_request' && 'mode=max' || 'false' }}
+          sbom: ${{ github.event_name != 'pull_request' }}
+
+      # Keyless (Sigstore/Fulcio/Rekor) signature over the pushed multi-arch
+      # index digest, using the job's OIDC identity. No long-lived keys.
+      - name: Install cosign
+        if: github.event_name != 'pull_request'
+        uses: sigstore/cosign-installer@7e8b541eb2e61bf99390e1afd4be13a184e9ebc5 # v3.10.1
+
+      - name: Sign the pushed image by digest
+        if: github.event_name != 'pull_request'
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: cosign sign --yes "cacertsfriend/ca-certs-images@${DIGEST}"
 
   # Single check that succeeds only when every matrix build succeeded. Make
   # this the required status check on branch protection so adding or removing
-  # Dockerfiles from the matrix never changes which check must pass.
+  # Dockerfiles from the matrix never changes which check must pass. Any new
+  # must-pass job belongs in this job's `needs:` list (not as a second
+  # required check) so this stays the one gate.
   build-all:
     if: always()
     needs: build
