@@ -33,6 +33,11 @@ jobs:
             tags: |
               cacertsfriend/ca-certs-images:debian-13
               cacertsfriend/ca-certs-images:trixie
+          - dir: debian-forky
+            tags: |
+              cacertsfriend/ca-certs-images:debian-forky
+              cacertsfriend/ca-certs-images:forky
+              cacertsfriend/ca-certs-images:testing
     steps:
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
