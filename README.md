@@ -44,7 +44,7 @@ attestations. Verify a signature against the workflow identity:
 
 ```sh
 cosign verify \
-  --certificate-identity-regexp '^https://github.com/jmhodges/ca-certs-images/\.github/workflows/build\.yml@' \
+  --certificate-identity-regexp '^https://github.com/jmhodges/ca-certs-images/\.github/workflows/build\.yml@refs/heads/main$' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com \
   cacertsfriend/ca-certs-images:debian-13
 ```
