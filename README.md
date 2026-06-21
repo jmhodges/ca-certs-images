@@ -6,11 +6,18 @@ major version of the official Debian image.
 Each `FROM` is pinned to **both** the tag and the sha256 digest of the
 multi-arch image index, so builds are reproducible while still being readable.
 
-| Directory      | Debian version | Codename | Status                           |
-|----------------|----------------|----------|----------------------------------|
-| `debian-12`    | 12             | bookworm | oldstable / LTS                  |
-| `debian-13`    | 13             | trixie   | stable                           |
-| `debian-forky` | testing        | forky    | testing                          |
+| Directory           | Debian version | Codename | Status                      |
+|---------------------|----------------|----------|-----------------------------|
+| `debian-12`         | 12             | bookworm | oldstable / LTS             |
+| `debian-12-slim`    | 12 (slim)      | bookworm | oldstable / LTS             |
+| `debian-13`         | 13             | trixie   | stable                      |
+| `debian-13-slim`    | 13 (slim)      | trixie   | stable                      |
+| `debian-forky`      | testing        | forky    | testing                     |
+| `debian-forky-slim` | testing (slim) | forky    | testing                     |
+
+Each `-slim` directory builds on the matching official `debian:<tag>-slim`
+image, which drops files (man pages, locales, etc.) most container workloads
+don't need.
 
 EOL versions (Debian 10 "buster" and earlier) are intentionally excluded.
 
@@ -23,11 +30,14 @@ touches a README or an unrelated directory will not republish an image. Images
 are pushed to Docker Hub under
 [`cacertsfriend/ca-certs-images`](https://hub.docker.com/r/cacertsfriend/ca-certs-images):
 
-| Tag            | Aliases              | Debian version |
-|----------------|----------------------|----------------|
-| `debian-12`    | `bookworm`           | 12             |
-| `debian-13`    | `trixie`             | 13             |
-| `debian-forky` | `forky`, `testing`   | testing        |
+| Tag                 | Aliases                          | Debian version |
+|---------------------|----------------------------------|----------------|
+| `debian-12`         | `bookworm`                       | 12             |
+| `debian-12-slim`    | `bookworm-slim`                  | 12 (slim)      |
+| `debian-13`         | `trixie`                         | 13             |
+| `debian-13-slim`    | `trixie-slim`                    | 13 (slim)      |
+| `debian-forky`      | `forky`, `testing`               | testing        |
+| `debian-forky-slim` | `forky-slim`, `testing-slim`     | testing (slim) |
 
 ```sh
 docker pull cacertsfriend/ca-certs-images:debian-13

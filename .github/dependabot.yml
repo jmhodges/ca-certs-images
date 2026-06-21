@@ -10,9 +10,27 @@ updates:
       - dependency-name: "debian"
         update-types:
           - "version-update:semver-major"
+  # Debian 12 (bookworm), slim: same policy as the full debian-12 image.
+  - package-ecosystem: "docker"
+    directory: "/debian-12-slim"
+    schedule:
+      interval: "daily"
+    ignore:
+      - dependency-name: "debian"
+        update-types:
+          - "version-update:semver-major"
   # Debian 13 (trixie): same policy, pinned to the 13 major version.
   - package-ecosystem: "docker"
     directory: "/debian-13"
+    schedule:
+      interval: "daily"
+    ignore:
+      - dependency-name: "debian"
+        update-types:
+          - "version-update:semver-major"
+  # Debian 13 (trixie), slim: same policy as the full debian-13 image.
+  - package-ecosystem: "docker"
+    directory: "/debian-13-slim"
     schedule:
       interval: "daily"
     ignore:
@@ -23,6 +41,11 @@ updates:
   # and there is no semver major to guard against.
   - package-ecosystem: "docker"
     directory: "/debian-forky"
+    schedule:
+      interval: "daily"
+  # Debian testing (forky), slim: digest-only updates, like the full image.
+  - package-ecosystem: "docker"
+    directory: "/debian-forky-slim"
     schedule:
       interval: "daily"
   # Keep the SHA-pinned GitHub Actions in the build workflow up to date; the
