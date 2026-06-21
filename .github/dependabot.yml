@@ -19,6 +19,12 @@ updates:
       - dependency-name: "debian"
         update-types:
           - "version-update:semver-major"
+  # Debian testing (forky): tracks the codename tag, so updates are digest-only
+  # and there is no semver major to guard against.
+  - package-ecosystem: "docker"
+    directory: "/debian-forky"
+    schedule:
+      interval: "daily"
   # Keep the SHA-pinned GitHub Actions in the build workflow up to date; the
   # pins would otherwise silently rot. Dependabot bumps both the digest and
   # the trailing version comment.

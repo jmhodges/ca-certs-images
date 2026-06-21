@@ -6,10 +6,11 @@ major version of the official Debian image.
 Each `FROM` is pinned to **both** the tag and the sha256 digest of the
 multi-arch image index, so builds are reproducible while still being readable.
 
-| Directory   | Debian version | Codename | Status                              |
-|-------------|----------------|----------|-------------------------------------|
-| `debian-12` | 12             | bookworm | oldstable / LTS                     |
-| `debian-13` | 13             | trixie   | stable                              |
+| Directory      | Debian version | Codename | Status                           |
+|----------------|----------------|----------|----------------------------------|
+| `debian-12`    | 12             | bookworm | oldstable / LTS                  |
+| `debian-13`    | 13             | trixie   | stable                           |
+| `debian-forky` | testing        | forky    | testing                          |
 
 EOL versions (Debian 10 "buster" and earlier) are intentionally excluded.
 
@@ -19,10 +20,11 @@ Pull requests build every Dockerfile (for `linux/amd64` and `linux/arm64`)
 without pushing. Pushes to `main` build and push the multi-arch images to
 Docker Hub under [`cacertsfriend/ca-certs-images`](https://hub.docker.com/r/cacertsfriend/ca-certs-images):
 
-| Tag           | Aliases    | Debian version |
-|---------------|------------|----------------|
-| `debian-12`   | `bookworm` | 12             |
-| `debian-13`   | `trixie`   | 13             |
+| Tag            | Aliases              | Debian version |
+|----------------|----------------------|----------------|
+| `debian-12`    | `bookworm`           | 12             |
+| `debian-13`    | `trixie`             | 13             |
+| `debian-forky` | `forky`, `testing`   | testing        |
 
 ```sh
 docker pull cacertsfriend/ca-certs-images:debian-13
