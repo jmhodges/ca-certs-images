@@ -1,4 +1,4 @@
-# ca-cert-images
+# ca-certs-images
 
 Dockerfiles that install `ca-certificates` on top of each currently-supported
 major version of the official Debian image.
