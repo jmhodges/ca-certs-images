@@ -2,6 +2,12 @@ name: build
 
 # Build every Dockerfile on pull requests (no push) and build + push the
 # resulting multi-arch images to Docker Hub on pushes to main.
+#
+# On pushes to main we only push (and sign/attest) the images whose inputs
+# actually changed: a commit that only touches a README or an unrelated
+# directory will rebuild for verification but will NOT republish an image.
+# Pull requests always build every image so the required `build-all` check
+# stays a stable, always-reporting gate regardless of what changed.
 on:
   pull_request:
   push:
@@ -45,13 +51,46 @@ jobs:
               cacertsfriend/ca-certs-images:testing
     steps:
       - name: Checkout
+        # fetch-depth: 0 so the push-decision step below can diff the full
+        # push range (github.event.before..github.sha).
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@06116385d9baf250c9f4dcb4858b16962ea869c3 # v4.1.0
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4.1.0
+
+      # Decide whether this matrix image should be pushed. Pull requests never
+      # push. On main we push only when files under this image's directory --
+      # or this workflow itself -- changed in the pushed range.
+      - name: Decide whether to push this image
+        id: decide
+        env:
+          DIR: ${{ matrix.dir }}
+          EVENT: ${{ github.event_name }}
+          BEFORE: ${{ github.event.before }}
+          SHA: ${{ github.sha }}
+        run: |
+          if [ "$EVENT" = "pull_request" ]; then
+            echo "Pull request: build only, no push."
+            echo "push=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          base="$BEFORE"
+          if [ -z "$base" ] || [ "$base" = "0000000000000000000000000000000000000000" ]; then
+            base="${SHA}^"
+          fi
+          pattern="^(${DIR}/|\.github/workflows/build\.yml$)"
+          if git diff --name-only "$base" "$SHA" | grep -Eq "$pattern"; then
+            echo "$DIR (or the build workflow) changed since $base: will push."
+            echo "push=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "$DIR unchanged since $base: skipping push."
+            echo "push=false" >> "$GITHUB_OUTPUT"
+          fi
 
       # Only log in when we are going to push (pushes to main). Pull request
       # runs build-only and must not need access to secrets.
@@ -68,22 +107,22 @@ jobs:
         with:
           context: ./${{ matrix.dir }}
           platforms: linux/amd64,linux/arm64
-          push: ${{ github.event_name != 'pull_request' }}
+          push: ${{ steps.decide.outputs.push == 'true' }}
           tags: ${{ matrix.tags }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           # SLSA provenance + SBOM attestations, attached to the image we push.
-          provenance: ${{ github.event_name != 'pull_request' && 'mode=max' || 'false' }}
-          sbom: ${{ github.event_name != 'pull_request' }}
+          provenance: ${{ steps.decide.outputs.push == 'true' && 'mode=max' || 'false' }}
+          sbom: ${{ steps.decide.outputs.push == 'true' }}
 
       # Keyless (Sigstore/Fulcio/Rekor) signature over the pushed multi-arch
       # index digest, using the job's OIDC identity. No long-lived keys.
       - name: Install cosign
-        if: github.event_name != 'pull_request'
+        if: steps.decide.outputs.push == 'true'
         uses: sigstore/cosign-installer@7e8b541eb2e61bf99390e1afd4be13a184e9ebc5 # v3.10.1
 
       - name: Sign the pushed image by digest
-        if: github.event_name != 'pull_request'
+        if: steps.decide.outputs.push == 'true'
         env:
           DIGEST: ${{ steps.build.outputs.digest }}
         run: cosign sign --yes "cacertsfriend/ca-certs-images@${DIGEST}"
