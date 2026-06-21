@@ -61,3 +61,19 @@ jobs:
           tags: ${{ matrix.tags }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  # Single check that succeeds only when every matrix build succeeded. Make
+  # this the required status check on branch protection so adding or removing
+  # Dockerfiles from the matrix never changes which check must pass.
+  build-all:
+    if: always()
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check matrix build results
+        run: |
+          if [ "${{ needs.build.result }}" != "success" ]; then
+            echo "One or more matrix builds did not succeed: ${{ needs.build.result }}"
+            exit 1
+          fi
+          echo "All matrix builds succeeded."
