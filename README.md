@@ -33,6 +33,26 @@ docker pull cacertsfriend/ca-certs-images:debian-13
 Publishing requires the `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` repository
 secrets to be configured.
 
+## Verifying images
+
+Pushed images are keylessly signed with [cosign](https://github.com/sigstore/cosign)
+using the GitHub Actions OIDC identity, and carry SLSA provenance and SBOM
+attestations. Verify a signature against the workflow identity:
+
+```sh
+cosign verify \
+  --certificate-identity-regexp '^https://github.com/jmhodges/ca-certs-images/\.github/workflows/build\.yml@' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  cacertsfriend/ca-certs-images:debian-13
+```
+
+Inspect the provenance / SBOM attestations:
+
+```sh
+docker buildx imagetools inspect cacertsfriend/ca-certs-images:debian-13 --format '{{ json .Provenance }}'
+docker buildx imagetools inspect cacertsfriend/ca-certs-images:debian-13 --format '{{ json .SBOM }}'
+```
+
 ## Building
 
 ```sh
