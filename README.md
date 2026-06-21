@@ -13,6 +13,24 @@ multi-arch image index, so builds are reproducible while still being readable.
 
 EOL versions (Debian 10 "buster" and earlier) are intentionally excluded.
 
+## Images
+
+Pull requests build every Dockerfile (for `linux/amd64` and `linux/arm64`)
+without pushing. Pushes to `main` build and push the multi-arch images to
+Docker Hub under [`cacertsfriend/ca-certs-images`](https://hub.docker.com/r/cacertsfriend/ca-certs-images):
+
+| Tag           | Aliases    | Debian version |
+|---------------|------------|----------------|
+| `debian-12`   | `bookworm` | 12             |
+| `debian-13`   | `trixie`   | 13             |
+
+```sh
+docker pull cacertsfriend/ca-certs-images:debian-13
+```
+
+Publishing requires the `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` repository
+secrets to be configured.
+
 ## Building
 
 ```sh
