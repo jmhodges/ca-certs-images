@@ -1,0 +1,63 @@
+name: promote-debian
+
+# Scheduled check that promotes Debian "forky" once it is released as stable:
+# it moves debian-forky/ to debian-14/ and seeds a directory for whatever
+# codename Debian rolled testing on to, then opens a pull request. It is a
+# no-op until that release actually happens, so it is safe to run on a schedule.
+# All the detection and editing logic lives in .github/scripts/promote-debian.sh.
+on:
+  schedule:
+    # Weekly is plenty: Debian's release cadence is ~2 years.
+    - cron: "37 6 * * 1"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    # The updater environment holds the ca-certs-bot GitHub App credentials
+    # (APP_CLIENT_ID / APP_PRIVATE_KEY) used to push the branch and open the PR.
+    # A GitHub App token (not the default GITHUB_TOKEN) is required so the build
+    # workflow actually runs on the pull request this job opens.
+    environment: updater
+    steps:
+      - name: Mint a ca-certs-bot token
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.APP_CLIENT_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          # Persist the app token so the later git push is authenticated as the
+          # bot rather than the default GITHUB_TOKEN.
+          token: ${{ steps.app-token.outputs.token }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4.1.0
+
+      - name: Detect release and prepare promotion
+        id: prep
+        run: .github/scripts/promote-debian.sh
+
+      - name: Push branch and open pull request
+        if: steps.prep.outputs.pr == 'true'
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          BRANCH: ${{ steps.prep.outputs.branch }}
+          TITLE: ${{ steps.prep.outputs.title }}
+        run: |
+          git push -u origin "$BRANCH"
+          gh pr create \
+            --base main \
+            --head "$BRANCH" \
+            --title "$TITLE" \
+            --body-file pr-body.md
