@@ -17,8 +17,11 @@ EOL versions (Debian 10 "buster" and earlier) are intentionally excluded.
 ## Images
 
 Pull requests build every Dockerfile (for `linux/amd64` and `linux/arm64`)
-without pushing. Pushes to `main` build and push the multi-arch images to
-Docker Hub under [`cacertsfriend/ca-certs-images`](https://hub.docker.com/r/cacertsfriend/ca-certs-images):
+without pushing. Pushes to `main` build every image, but only **push** (and
+sign/attest) the images whose inputs actually changed — a commit that only
+touches a README or an unrelated directory will not republish an image. Images
+are pushed to Docker Hub under
+[`cacertsfriend/ca-certs-images`](https://hub.docker.com/r/cacertsfriend/ca-certs-images):
 
 | Tag            | Aliases              | Debian version |
 |----------------|----------------------|----------------|
