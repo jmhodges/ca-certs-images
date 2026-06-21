@@ -4,7 +4,7 @@ name: promote-debian
 # it moves debian-forky/ to debian-14/ and seeds a directory for whatever
 # codename Debian rolled testing on to, then opens a pull request. It is a
 # no-op until that release actually happens, so it is safe to run on a schedule.
-# All the detection and editing logic lives in .github/scripts/promote-debian.sh.
+# All the detection and editing logic lives in the cmd/promote-debian Go program.
 on:
   schedule:
     # Weekly is plenty: Debian's release cadence is ~2 years.
@@ -44,9 +44,10 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4.1.0
 
+      # ubuntu-latest ships a recent Go toolchain, so no setup-go step is needed.
       - name: Detect release and prepare promotion
         id: prep
-        run: .github/scripts/promote-debian.sh
+        run: go run ./cmd/promote-debian
 
       - name: Push branch and open pull request
         if: steps.prep.outputs.pr == 'true'
