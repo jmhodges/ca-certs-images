@@ -1,0 +1,10 @@
+version: 2
+updates:
+  - package-ecosystem: "docker"
+    directory: "/debian-12"
+    schedule:
+      interval: "daily"
+  - package-ecosystem: "docker"
+    directory: "/debian-13"
+    schedule:
+      interval: "daily"
