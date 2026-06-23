@@ -3,6 +3,15 @@
 Dockerfiles that install `ca-certificates` on top of each currently-supported
 major version of the official Debian image.
 
+These exist for Debian-based services that need `ca-certificates` to make
+outbound TLS connections (calling APIs, fetching dependencies, talking to a
+database over TLS) but still want a small image. They're handy as the final
+stage of a multistage build. For example, the `golang` build image runs around
+1&nbsp;GB, so copying your Go binary from it into one of these `-slim` images
+keeps the shipped image tiny while still having the trusted CA roots your binary
+needs. The `-slim` images average roughly 30&nbsp;MB compressed, or about
+95&nbsp;MB on disk.
+
 Each `FROM` is pinned to **both** the tag and the sha256 digest of the
 multi-arch image index, so builds are reproducible while still being readable.
 
