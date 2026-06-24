@@ -1,6 +1,6 @@
 # Debian 12 (bookworm)
 # Pinned to both the tag and the sha256 digest of the multi-arch image index.
-FROM debian:12@sha256:49ba348354a28e39c70beffd6cf43bdb8d55d81ce4b746b0428717d054b8bbc4
+FROM debian:12@sha256:30482e873082e906a4908c10529180aefb6f77620aea7404b909829fadc5d168
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates \
