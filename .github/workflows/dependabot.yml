@@ -11,3 +11,48 @@ jobs:
       pull-requests: write
     steps:
       - uses: jmhodges/dependabot-pr-merge-cleanup@v1.0.2
+
+  # Auto-merge Dockerfile (docker ecosystem) bumps once the required build
+  # check passes. Runs only after pr-cleanup so superseded PRs are closed
+  # first. github-actions bumps are intentionally left for manual review.
+  auto-merge:
+    runs-on: ubuntu-latest
+    needs: pr-cleanup
+    if: github.actor == 'dependabot[bot]'
+    # The merge is done with a ca-certs-bot app token (minted below), not
+    # github.token: merges attributed to GITHUB_TOKEN do not trigger new
+    # workflow runs, so the resulting push to main would never run build.yml's
+    # publish/sign job and Docker Hub would keep serving the stale image.
+    # The workflow's own token is only used by fetch-metadata, read-only.
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - name: Fetch Dependabot metadata
+        id: metadata
+        uses: dependabot/fetch-metadata@25dd0e34f4fe68f24cc83900b1fe3fe149efef98 # v3.1.0
+
+      # This workflow runs as dependabot[bot], so these secrets live in the
+      # Dependabot secrets store (Settings -> Secrets and variables ->
+      # Dependabot), not the Actions one.
+      - name: Mint ca-certs-bot token
+        id: app-token
+        if: |
+          steps.metadata.outputs.package-ecosystem == 'docker' &&
+          steps.metadata.outputs.update-type != 'version-update:semver-major'
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.CA_CERTS_BOT_APP_ID }}
+          private-key: ${{ secrets.CA_CERTS_BOT_PRIVATE_KEY }}
+
+      # Enable GitHub auto-merge: the PR merges itself only once the required
+      # build-all status check (from build.yml) succeeds. semver-major is
+      # excluded as a guard even though dependabot.yml already ignores it.
+      - name: Enable auto-merge for Docker updates
+        if: |
+          steps.metadata.outputs.package-ecosystem == 'docker' &&
+          steps.metadata.outputs.update-type != 'version-update:semver-major'
+        run: gh pr merge --auto --squash "$PR_URL"
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
