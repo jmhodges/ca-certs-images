@@ -104,6 +104,13 @@ This is automated by [`tools/ccbump`](tools/ccbump), run daily by the
 4. if it is newer, opens or updates a per-Dockerfile, auto-merging PR that
    rewrites the two managed `ARG`s.
 
+Even when `ca-certificates` itself is unchanged, ccbump refreshes
+`DEBIAN_SNAPSHOT` whenever doing so would change any package the install
+resolves. The install's dependencies (e.g. `openssl`) come from the pinned
+snapshot too, so without this a security fix to a dependency would not reach
+the images until the next `ca-certificates` release — potentially months
+later.
+
 Each bump PR is built by the [`build`](.github/workflows/build.yml) workflow on
 both `linux/amd64` and `linux/arm64`. The `build-all` check (the required status
 check on `main`) gates auto-merge, so a bump can only ever change how fresh the

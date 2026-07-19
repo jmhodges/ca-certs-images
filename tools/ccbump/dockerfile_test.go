@@ -92,12 +92,8 @@ func TestWithVersions(t *testing.T) {
 func countDifferentLines(a, b string) int {
 	al, bl := strings.Split(a, "\n"), strings.Split(b, "\n")
 	n := 0
-	for i := range al {
-		if i >= len(bl) {
-			n++
-			continue
-		}
-		if al[i] != bl[i] {
+	for i := 0; i < len(al) || i < len(bl); i++ {
+		if i >= len(al) || i >= len(bl) || al[i] != bl[i] {
 			n++
 		}
 	}

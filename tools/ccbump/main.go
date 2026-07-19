@@ -1,11 +1,17 @@
-// Command ccbump keeps each Dockerfile's pinned ca-certificates version fresh.
+// Command ccbump keeps each Dockerfile's pinned ca-certificates install fresh.
 //
 // For every managed Dockerfile it runs the exact pinned base image, points apt
 // at a current snapshot.debian.org timestamp, and reads the latest
-// ca-certificates version available there. If that version is newer than the
-// one pinned on main (compared with `dpkg --compare-versions` inside the
-// container, never on the host), it opens or updates a per-Dockerfile,
-// auto-merging pull request that rewrites the two managed ARG anchors.
+// ca-certificates version available there. It opens or updates a
+// per-Dockerfile, auto-merging pull request that rewrites the two managed ARG
+// anchors when either:
+//
+//   - that version is newer than the one pinned on main (compared with
+//     `dpkg --compare-versions` inside the container, never on the host), or
+//   - the version is unchanged but refreshing the snapshot would change some
+//     package the install resolves. Dependencies like openssl come from the
+//     pinned snapshot too, so without this they would never see security
+//     updates between ca-certificates releases.
 //
 // Correctness of a bump is guaranteed by the build.yml PR run, which builds the
 // new pin on both arches before auto-merge can land it; ccbump only affects
@@ -81,11 +87,51 @@ type bumper struct {
 	detectOnly bool
 }
 
+// A change is one pending bump for one Dockerfile: either a new
+// ca-certificates version, or a snapshot-only refresh that updates the
+// packages the install resolves while the pinned version stays the same.
+type change struct {
+	d *dockerfile
+	// candidate is the ca-certificates version the bump will pin. For a
+	// snapshot-only refresh it equals what the new snapshot resolves, which is
+	// normally d.version unchanged.
+	candidate string
+	// snapshot is the new DEBIAN_SNAPSHOT value.
+	snapshot string
+	// versionBump is true when candidate is strictly newer than d.version.
+	versionBump bool
+	// depDiff describes how the resolved install set changes, one line per
+	// package. Only populated for snapshot-only refreshes.
+	depDiff []string
+}
+
+func (c *change) title() string {
+	dir := filepath.Dir(c.d.path)
+	if c.versionBump {
+		return fmt.Sprintf("%s: bump ca-certificates to %s", dir, c.candidate)
+	}
+	return fmt.Sprintf("%s: refresh Debian snapshot to %s", dir, c.snapshot)
+}
+
 // targetDirs returns the Dockerfile directories to process. An explicit CSV
 // wins; otherwise it auto-discovers every "debian-*" dir that has a Dockerfile.
 func (b *bumper) targetDirs(csv string) ([]string, error) {
 	if csv != "" {
-		return strings.Split(csv, ","), nil
+		var dirs []string
+		for dir := range strings.SplitSeq(csv, ",") {
+			dir = strings.TrimSpace(dir)
+			if dir == "" {
+				continue
+			}
+			if _, err := os.Stat(filepath.Join(b.repoRoot, dir, "Dockerfile")); err != nil {
+				return nil, fmt.Errorf("-dirs entry %q has no Dockerfile: %w", dir, err)
+			}
+			dirs = append(dirs, dir)
+		}
+		if len(dirs) == 0 {
+			return nil, fmt.Errorf("-dirs %q names no directories", csv)
+		}
+		return dirs, nil
 	}
 	entries, err := os.ReadDir(b.repoRoot)
 	if err != nil {
@@ -116,42 +162,69 @@ func (b *bumper) process(dir string) error {
 		return err
 	}
 
-	candidate, err := b.detect(d)
+	cur, err := b.stateAt(d, b.snapshot)
 	if err != nil {
-		return fmt.Errorf("detecting latest ca-certificates: %w", err)
+		return fmt.Errorf("detecting at snapshot %s: %w", b.snapshot, err)
 	}
 
 	if b.detectOnly {
-		fmt.Printf("%s\tsnapshot=%s\tcurrent=%s\tcandidate=%s\n", dir, b.snapshot, d.version, candidate)
+		fmt.Printf("%s\tsnapshot=%s\tcurrent=%s\tcandidate=%s\n", dir, b.snapshot, d.version, cur.candidate)
 		return nil
 	}
 
-	newer, err := b.versionGreater(d.image, candidate, d.version)
+	newer, err := b.versionGreater(d.image, cur.candidate, d.version)
 	if err != nil {
 		return fmt.Errorf("comparing versions: %w", err)
 	}
-	if !newer {
-		fmt.Printf("%s: up to date (pinned %s, latest %s)\n", dir, d.version, candidate)
-		return nil
+
+	c := &change{d: d, candidate: cur.candidate, snapshot: b.snapshot, versionBump: newer}
+	if newer {
+		fmt.Printf("%s: ca-certificates %s -> %s (snapshot %s -> %s)\n",
+			dir, d.version, cur.candidate, d.snapshot, b.snapshot)
+	} else {
+		// Same ca-certificates version, but the install also pulls in
+		// dependencies (openssl and friends) resolved at the pinned snapshot.
+		// If resolving at the current snapshot would change any of them --
+		// e.g. an openssl security update -- refresh the snapshot so the fix
+		// reaches the images without waiting for the next ca-certificates
+		// release.
+		pinned, err := b.stateAt(d, d.snapshot)
+		if err != nil {
+			return fmt.Errorf("detecting at pinned snapshot %s: %w", d.snapshot, err)
+		}
+		c.depDiff = diffManifests(pinned.manifest, cur.manifest)
+		if len(c.depDiff) == 0 {
+			fmt.Printf("%s: up to date (pinned %s at %s; no dependency changes at %s)\n",
+				dir, d.version, d.snapshot, b.snapshot)
+			return nil
+		}
+		fmt.Printf("%s: snapshot %s -> %s changes resolved dependencies:\n", dir, d.snapshot, b.snapshot)
+		for _, l := range c.depDiff {
+			fmt.Printf("  %s\n", l)
+		}
 	}
 
-	fmt.Printf("%s: %s -> %s (snapshot %s)\n", dir, d.version, candidate, b.snapshot)
 	if b.dryRun {
 		return nil
 	}
-	return b.openOrUpdatePR(d, candidate)
+	return b.openOrUpdatePR(c)
 }
 
 // parseTarget reads and parses a Dockerfile, preferring the copy committed on
 // the base branch -- the source of truth for "what main builds", independent of
 // a dirty working tree. It falls back to the working tree when the base copy is
 // missing or not yet in the managed shape (e.g. before the refactor has landed
-// on main, or during local testing on a branch).
+// on main, or during local testing on a branch), warning so a regression of
+// main's copy is visible in the logs rather than silently masked.
 func (b *bumper) parseTarget(path string) (*dockerfile, error) {
-	if content, err := b.fileOnBase(path); err == nil {
-		if d, err := parseDockerfile(path, string(content)); err == nil {
-			return d, nil
-		}
+	if content, err := b.fileOnBase(path); err != nil {
+		fmt.Fprintf(os.Stderr, "ccbump: warning: %s: could not read copy on %s (%v); falling back to the working tree\n",
+			path, b.baseBranch, err)
+	} else if d, err := parseDockerfile(path, string(content)); err != nil {
+		fmt.Fprintf(os.Stderr, "ccbump: warning: %s: copy on %s is not in the managed shape (%v); falling back to the working tree\n",
+			path, b.baseBranch, err)
+	} else {
+		return d, nil
 	}
 	content, err := os.ReadFile(filepath.Join(b.repoRoot, path))
 	if err != nil {
@@ -160,9 +233,23 @@ func (b *bumper) parseTarget(path string) (*dockerfile, error) {
 	return parseDockerfile(path, string(content))
 }
 
-// detect runs the pinned base image, points apt at b.snapshot, and returns the
-// candidate (latest available) ca-certificates version at that snapshot.
-func (b *bumper) detect(d *dockerfile) (string, error) {
+// A snapshotState is what one snapshot timestamp resolves for one Dockerfile:
+// the candidate (latest available) ca-certificates version, and the full set
+// of packages installing it would pull in at that snapshot.
+type snapshotState struct {
+	candidate string
+	// manifest is the sorted "pkg version" lines the install resolves.
+	manifest []string
+}
+
+// stateAt runs the pinned base image with apt pointed at the given snapshot
+// and reads back the candidate ca-certificates version plus the resolved
+// install manifest.
+//
+// The sources.list template here mirrors the RUN block in each managed
+// Dockerfile; keep the two in sync or detection will drift from what the
+// images actually build against.
+func (b *bumper) stateAt(d *dockerfile, snapshot string) (*snapshotState, error) {
 	script := fmt.Sprintf(`set -e
 printf '%%s\n' \
   "deb http://snapshot.debian.org/archive/debian/%[1]s/ %[2]s main" \
@@ -171,18 +258,73 @@ printf '%%s\n' \
   > /etc/apt/sources.list
 rm -f /etc/apt/sources.list.d/*
 apt-get -o Acquire::Check-Valid-Until=false -o Acquire::Retries=5 update >/dev/null
-apt-cache policy ca-certificates | sed -n 's/^  Candidate: //p'
-`, b.snapshot, d.suite)
+cand="$(apt-cache policy ca-certificates | sed -n 's/^  Candidate: //p')"
+printf '%%s\n' "$cand"
+[ -n "$cand" ] && [ "$cand" != "(none)" ] || exit 0
+apt-get install -s --no-install-recommends ca-certificates \
+  | sed -n 's/^Inst \([^ ]*\) (\([^ ]*\).*/\1 \2/p' | sort
+`, snapshot, d.suite)
 
 	out, err := b.run("docker", "run", "--rm", "--platform", b.platform, d.image, "sh", "-c", script)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	candidate := strings.TrimSpace(out)
+	lines := strings.Split(strings.TrimSpace(out), "\n")
+	candidate := strings.TrimSpace(lines[0])
 	if candidate == "" || candidate == "(none)" {
-		return "", fmt.Errorf("no ca-certificates candidate at snapshot %s for %s", b.snapshot, d.suite)
+		return nil, fmt.Errorf("no ca-certificates candidate at snapshot %s for %s", snapshot, d.suite)
 	}
-	return candidate, nil
+	var manifest []string
+	for _, l := range lines[1:] {
+		if l = strings.TrimSpace(l); l != "" {
+			manifest = append(manifest, l)
+		}
+	}
+	if len(manifest) == 0 {
+		// The base images never preinstall ca-certificates, so an empty
+		// manifest means the simulated-install output was not parseable --
+		// fail loudly rather than silently never seeing dependency changes.
+		return nil, fmt.Errorf("empty install manifest at snapshot %s for %s", snapshot, d.suite)
+	}
+	return &snapshotState{candidate: candidate, manifest: manifest}, nil
+}
+
+// diffManifests returns one human-readable line per package whose resolved
+// version differs between two "pkg version" manifests, or nil if they match.
+func diffManifests(old, new []string) []string {
+	parse := func(m []string) map[string]string {
+		vers := make(map[string]string, len(m))
+		for _, l := range m {
+			pkg, ver, _ := strings.Cut(l, " ")
+			vers[pkg] = ver
+		}
+		return vers
+	}
+	ov, nv := parse(old), parse(new)
+	var pkgs []string
+	for p := range ov {
+		pkgs = append(pkgs, p)
+	}
+	for p := range nv {
+		if _, ok := ov[p]; !ok {
+			pkgs = append(pkgs, p)
+		}
+	}
+	sort.Strings(pkgs)
+	var diff []string
+	for _, p := range pkgs {
+		o, oOK := ov[p]
+		n, nOK := nv[p]
+		switch {
+		case oOK && nOK && o != n:
+			diff = append(diff, fmt.Sprintf("%s %s -> %s", p, o, n))
+		case oOK && !nOK:
+			diff = append(diff, fmt.Sprintf("%s %s (no longer installed)", p, o))
+		case !oOK && nOK:
+			diff = append(diff, fmt.Sprintf("%s %s (newly installed)", p, n))
+		}
+	}
+	return diff
 }
 
 // versionGreater reports whether candidate is strictly newer than current,
@@ -204,30 +346,32 @@ func (b *bumper) versionGreater(image, candidate, current string) (bool, error) 
 }
 
 // openOrUpdatePR rewrites the managed anchors on a stable per-Dockerfile branch
-// and ensures an auto-merging PR exists. It is idempotent: if the branch already
-// pins the candidate version it skips the push and only re-asserts auto-merge.
-func (b *bumper) openOrUpdatePR(d *dockerfile, candidate string) error {
+// and ensures an auto-merging PR exists. It is idempotent: if the branch
+// already holds exactly the content this bump would write -- same version,
+// same snapshot, same everything-else from base -- it skips the force-push so
+// an open PR's checks are not needlessly restarted, and only re-asserts the
+// PR metadata and auto-merge.
+func (b *bumper) openOrUpdatePR(c *change) error {
+	d := c.d
 	dir := filepath.Dir(d.path)
 	branch := "ccbump/" + dir
-	newContent := d.withVersions(b.snapshot, candidate)
+	newContent := d.withVersions(c.snapshot, c.candidate)
 
-	if existing, err := b.fileOnRef("origin/"+branch, d.path); err == nil {
-		if pd, err := parseDockerfile(d.path, string(existing)); err == nil && pd.version == candidate {
-			fmt.Printf("%s: branch %s already pins %s; re-asserting auto-merge\n", dir, branch, candidate)
-			return b.ensurePR(branch, dir, d.version, candidate)
-		}
+	if existing, err := b.fileOnRef("origin/"+branch, d.path); err == nil && string(existing) == newContent {
+		fmt.Printf("%s: branch %s already up to date; re-asserting PR and auto-merge\n", dir, branch)
+		return b.ensurePR(branch, c)
 	}
 
-	if err := b.commitToBranch(branch, d.path, newContent, candidate); err != nil {
+	if err := b.commitToBranch(branch, d.path, newContent, c.title()); err != nil {
 		return err
 	}
-	return b.ensurePR(branch, dir, d.version, candidate)
+	return b.ensurePR(branch, c)
 }
 
 // commitToBranch resets branch to base, writes newContent, and force-pushes a
 // single bump commit. Force-push keeps the branch a clean one-commit delta from
 // base even after the base branch advances.
-func (b *bumper) commitToBranch(branch, path, newContent, candidate string) error {
+func (b *bumper) commitToBranch(branch, path, newContent, msg string) error {
 	if _, err := b.git("switch", "-C", branch, "origin/"+b.baseBranch); err != nil {
 		return fmt.Errorf("creating branch %s: %w", branch, err)
 	}
@@ -237,7 +381,6 @@ func (b *bumper) commitToBranch(branch, path, newContent, candidate string) erro
 	if _, err := b.git("add", path); err != nil {
 		return err
 	}
-	msg := fmt.Sprintf("%s: bump ca-certificates to %s", filepath.Dir(path), candidate)
 	if _, err := b.git("-c", "user.name="+b.gitName, "-c", "user.email="+b.gitEmail,
 		"commit", "-m", msg); err != nil {
 		return fmt.Errorf("committing %s: %w", path, err)
@@ -248,20 +391,28 @@ func (b *bumper) commitToBranch(branch, path, newContent, candidate string) erro
 	return nil
 }
 
-// ensurePR makes sure an open PR exists for branch and that auto-merge is on.
-// A failure to enable auto-merge is a warning, not fatal: the PR is the durable
-// artifact, and auto-merge can be re-asserted on the next run.
-func (b *bumper) ensurePR(branch, dir, oldVersion, candidate string) error {
+// ensurePR makes sure an open PR exists for branch, that its title and body
+// describe what the branch pins right now, and that auto-merge is on. Keeping
+// the title current matters beyond cosmetics: the squash merge uses the PR
+// title as the commit subject, so a stale title would record the wrong bump in
+// main's history. A failure to enable auto-merge is a warning, not fatal: the
+// PR is the durable artifact, and auto-merge can be re-asserted on the next
+// run.
+func (b *bumper) ensurePR(branch string, c *change) error {
+	dir := filepath.Dir(c.d.path)
 	num, err := b.prNumberForBranch(branch)
 	if err != nil {
 		return err
 	}
+	title, body := c.title(), prBody(c)
 	if num == "" {
-		title := fmt.Sprintf("%s: bump ca-certificates to %s", dir, candidate)
-		body := prBody(dir, oldVersion, candidate, b.snapshot)
 		if _, err := b.run("gh", "pr", "create", "--base", b.baseBranch, "--head", branch,
 			"--title", title, "--body", body); err != nil {
 			return fmt.Errorf("creating PR for %s: %w", branch, err)
+		}
+	} else {
+		if _, err := b.run("gh", "pr", "edit", num, "--title", title, "--body", body); err != nil {
+			return fmt.Errorf("updating PR #%s for %s: %w", num, branch, err)
 		}
 	}
 	if _, err := b.run("gh", "pr", "merge", "--auto", "--squash", branch); err != nil {
@@ -281,23 +432,31 @@ func (b *bumper) prNumberForBranch(branch string) (string, error) {
 	return strings.TrimSpace(out), nil
 }
 
-func prBody(dir, oldVersion, candidate, snapshot string) string {
-	return fmt.Sprintf(`Automated bump by `+"`tools/ccbump`"+`.
-
-| | |
-|---|---|
-| Dockerfile | `+"`%s/Dockerfile`"+` |
-| ca-certificates | `+"`%s`"+` → `+"`%s`"+` |
-| Debian snapshot | `+"`%s`"+` |
-
-The new version was detected by running the pinned base image and reading the
-latest `+"`ca-certificates`"+` available at the snapshot above. The apt sources are
-pinned to `+"`snapshot.debian.org`"+`, so this version stays fetchable forever.
+func prBody(c *change) string {
+	dir := filepath.Dir(c.d.path)
+	var sb strings.Builder
+	fmt.Fprintf(&sb, "Automated bump by `tools/ccbump`.\n\n")
+	fmt.Fprintf(&sb, "| | |\n|---|---|\n")
+	fmt.Fprintf(&sb, "| Dockerfile | `%s/Dockerfile` |\n", dir)
+	if c.versionBump {
+		fmt.Fprintf(&sb, "| ca-certificates | `%s` → `%s` |\n", c.d.version, c.candidate)
+	} else {
+		fmt.Fprintf(&sb, "| ca-certificates | `%s` (unchanged) |\n", c.candidate)
+	}
+	fmt.Fprintf(&sb, "| Debian snapshot | `%s` → `%s` |\n", c.d.snapshot, c.snapshot)
+	if len(c.depDiff) > 0 {
+		fmt.Fprintf(&sb, "\nRefreshing the snapshot changes the packages the `ca-certificates`\ninstall resolves:\n\n```\n%s\n```\n",
+			strings.Join(c.depDiff, "\n"))
+	}
+	fmt.Fprintf(&sb, `
+Detected by running the pinned base image and resolving `+"`ca-certificates`"+`
+at the snapshot above. The apt sources are pinned to `+"`snapshot.debian.org`"+`,
+so the pinned versions stay fetchable forever.
 
 This PR auto-merges once the `+"`build`"+` workflow proves the new pin builds on
 both `+"`linux/amd64`"+` and `+"`linux/arm64`"+`. Auto-merge only affects how fresh the
-image is; it can never make `+"`main`"+` fail to build.`,
-		dir, oldVersion, candidate, snapshot)
+image is; it can never make `+"`main`"+` fail to build.`)
+	return sb.String()
 }
 
 // fileOnBase returns the contents of path as committed on the base branch.

@@ -1,11 +1,13 @@
 name: ccbump
 
-# Keep each Dockerfile's pinned ca-certificates version fresh. ccbump runs the
+# Keep each Dockerfile's pinned ca-certificates install fresh. ccbump runs the
 # pinned base image, reads the latest ca-certificates available at a current
 # snapshot.debian.org timestamp, and opens (or updates) a per-Dockerfile,
-# auto-merging PR when a newer version exists. The bump PR is gated by the
-# `build` workflow, which proves the new pin builds on both arches before
-# auto-merge lands it.
+# auto-merging PR when a newer version exists -- or when refreshing the
+# snapshot would change a package the install resolves (e.g. an openssl
+# security update), even if ca-certificates itself is unchanged. The bump PR
+# is gated by the `build` workflow, which proves the new pin builds on both
+# arches before auto-merge lands it.
 on:
   schedule:
     # Daily at 06:17 UTC. ca-certificates changes rarely; a no-op run is cheap.
@@ -21,6 +23,10 @@ permissions: {}
 jobs:
   bump:
     runs-on: ubuntu-latest
+    # snapshot.debian.org is slow and rate-limited; a hung apt transfer inside
+    # a detection container should fail the run, not hold a runner for the
+    # default 6-hour job timeout.
+    timeout-minutes: 30
     steps:
       # Mint a GitHub App installation token. The bump PRs must be created with
       # this token (not the default GITHUB_TOKEN) so they trigger the `build`
