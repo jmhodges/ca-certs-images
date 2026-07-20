@@ -5,7 +5,7 @@ updates:
   - package-ecosystem: "docker"
     directory: "/debian-12"
     schedule:
-      interval: "daily"
+      interval: "weekly"
     ignore:
       - dependency-name: "debian"
         update-types:
@@ -14,7 +14,7 @@ updates:
   - package-ecosystem: "docker"
     directory: "/debian-12-slim"
     schedule:
-      interval: "daily"
+      interval: "weekly"
     ignore:
       - dependency-name: "debian"
         update-types:
@@ -23,7 +23,7 @@ updates:
   - package-ecosystem: "docker"
     directory: "/debian-13"
     schedule:
-      interval: "daily"
+      interval: "weekly"
     ignore:
       - dependency-name: "debian"
         update-types:
@@ -32,7 +32,7 @@ updates:
   - package-ecosystem: "docker"
     directory: "/debian-13-slim"
     schedule:
-      interval: "daily"
+      interval: "weekly"
     ignore:
       - dependency-name: "debian"
         update-types:
@@ -42,16 +42,16 @@ updates:
   - package-ecosystem: "docker"
     directory: "/debian-forky"
     schedule:
-      interval: "daily"
+      interval: "weekly"
   # Debian testing (forky), slim: digest-only updates, like the full image.
   - package-ecosystem: "docker"
     directory: "/debian-forky-slim"
     schedule:
-      interval: "daily"
+      interval: "weekly"
   # Keep the SHA-pinned GitHub Actions in the build workflow up to date; the
   # pins would otherwise silently rot. Dependabot bumps both the digest and
   # the trailing version comment.
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
-      interval: "daily"
+      interval: "weekly"
