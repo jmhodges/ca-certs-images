@@ -3,8 +3,8 @@
 FROM debian:12@sha256:813017f3d62be4b5891a7acca6a01bdcd4b8513daa81b1ab99d3a50385b26931
 
 # Managed by tools/ccbump -- do not edit by hand.
-ARG DEBIAN_SNAPSHOT=20260618T000000Z
-ARG CA_CERTIFICATES_VERSION=20230311+deb12u1
+ARG DEBIAN_SNAPSHOT=20260810T000000Z
+ARG CA_CERTIFICATES_VERSION=20250419~deb12u1
 
 # Pin apt at a snapshot.debian.org timestamp so the exact ca-certificates
 # version above stays fetchable forever, even after Debian's main mirror
