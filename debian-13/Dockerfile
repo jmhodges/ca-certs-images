@@ -1,6 +1,6 @@
 # Debian 13 (trixie)
 # Pinned to both the tag and the sha256 digest of the multi-arch image index.
-FROM debian:13@sha256:f324c7ff54321e8d9c588493a20244965938ce0aa50bbd1022d38010e9ffc4b1
+FROM debian:13@sha256:9cc080028c43b27d2074d63a5f9caf7166d731494965616c1a6d2827a004585c
 
 # Managed by tools/ccbump -- do not edit by hand.
 ARG DEBIAN_SNAPSHOT=20260826T000000Z
