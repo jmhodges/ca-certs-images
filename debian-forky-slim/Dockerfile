@@ -3,7 +3,7 @@
 FROM debian:forky-slim@sha256:7bb96d9b4ccd7f46f54853c258a56df0c6b628a63e65c2317959da18fd36932c
 
 # Managed by tools/ccbump -- do not edit by hand.
-ARG DEBIAN_SNAPSHOT=20260914T000000Z
+ARG DEBIAN_SNAPSHOT=20261009T000000Z
 ARG CA_CERTIFICATES_VERSION=20260816
 
 # Pin apt at a snapshot.debian.org timestamp so the exact ca-certificates
