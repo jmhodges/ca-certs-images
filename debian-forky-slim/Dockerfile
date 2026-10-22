@@ -3,8 +3,8 @@
 FROM debian:forky-slim@sha256:3c80e257eff6274d593eb33a94bda5174ccd619836e6a728a73e11c97f2213e3
 
 # Managed by tools/ccbump -- do not edit by hand.
-ARG DEBIAN_SNAPSHOT=20261009T000000Z
-ARG CA_CERTIFICATES_VERSION=20260816
+ARG DEBIAN_SNAPSHOT=20261022T000000Z
+ARG CA_CERTIFICATES_VERSION=20260816+nmu1
 
 # Pin apt at a snapshot.debian.org timestamp so the exact ca-certificates
 # version above stays fetchable forever, even after Debian's main mirror
