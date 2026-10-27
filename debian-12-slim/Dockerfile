@@ -3,7 +3,7 @@
 FROM debian:12-slim@sha256:7ff6ba31527b9e336162fa061746c366c4b2032f4d2cff2078bea43f78efe3f8
 
 # Managed by tools/ccbump -- do not edit by hand.
-ARG DEBIAN_SNAPSHOT=20261022T000000Z
+ARG DEBIAN_SNAPSHOT=20261027T000000Z
 ARG CA_CERTIFICATES_VERSION=20250419~deb12u2
 
 # Pin apt at a snapshot.debian.org timestamp so the exact ca-certificates
