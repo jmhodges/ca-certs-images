@@ -1,6 +1,6 @@
 # Debian testing (forky)
 # Pinned to both the tag and the sha256 digest of the multi-arch image index.
-FROM debian:forky@sha256:8ba3df177e65d13cb4392a490db1c48cb7f85461b5769f60eb37725221b8b203
+FROM debian:forky@sha256:49c219ade93d7c11635c0d57e735ed82339a503a4376cd6957046c2bd4e5905b
 
 # Managed by tools/ccbump -- do not edit by hand.
 ARG DEBIAN_SNAPSHOT=20261022T000000Z
