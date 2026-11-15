@@ -1,6 +1,6 @@
 # Debian 12 (bookworm)
 # Pinned to both the tag and the sha256 digest of the multi-arch image index.
-FROM debian:12@sha256:d74df7598108a173a621eda4d58a2adbf850b2d9a9d81bc2cca1a6c21174a880
+FROM debian:12@sha256:268fb24c39bca92d326dd83ea3abebe4a3f7751c804ffef23bb6d857dd343ff8
 
 # Managed by tools/ccbump -- do not edit by hand.
 ARG DEBIAN_SNAPSHOT=20261027T000000Z
